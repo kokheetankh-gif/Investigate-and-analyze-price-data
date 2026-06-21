@@ -7,10 +7,6 @@ import pandas as pd
 
 warnings.filterwarnings("ignore")
 
-# Default CSV resolution 
-# 1. Same folder as this script  (works when you run the file directly)
-# 2. Current working directory   (works when imported from another script)
-# 3. GitHub raw URL              (fallback — no local file needed)
 _GITHUB_URL = (
     "https://raw.githubusercontent.com/"
     "kokheetankh-gif/Investigate-and-analyze-price-data/main/Nat_Gas.csv"
@@ -39,11 +35,7 @@ def _resolve_csv(csv_path):
     print("  [info] Nat_Gas.csv not found locally — fetching from GitHub...")
     return _GITHUB_URL
 
-
-# ═══════════════════════════════════════════════════════════════════════════════
 # 1.  PRICE ESTIMATOR
-# ═══════════════════════════════════════════════════════════════════════════════
-
 def _load_csv(source: str) -> pd.DataFrame:
     """Load CSV from a local path or a URL."""
     if source.startswith("http"):
@@ -66,10 +58,10 @@ def _build_price_model(csv_source: str):
     """
     df = _load_csv(csv_source)
     df["date"] = pd.to_datetime(df["Dates"], format="%m/%d/%y")
-    df         = df.sort_values("date").reset_index(drop=True)
+    df = df.sort_values("date").reset_index(drop=True)
 
     start_date = df["date"].min()
-    prices     = df["Prices"].values
+    prices = df["Prices"].values
 
     def _days(d):
         return (pd.Timestamp(d) - start_date).days
@@ -78,17 +70,17 @@ def _build_price_model(csv_source: str):
 
     # OLS linear trend
     xbar, ybar = time.mean(), prices.mean()
-    slope      = np.sum((time - xbar) * (prices - ybar)) / np.sum((time - xbar) ** 2)
-    intercept  = ybar - slope * xbar
+    slope = np.sum((time - xbar) * (prices - ybar)) / np.sum((time - xbar) ** 2)
+    intercept = ybar - slope * xbar
 
     # Sinusoidal seasonal (bilinear projection, period = 365 days)
     residuals = prices - (slope * time + intercept)
-    sin_t     = np.sin(time * 2 * np.pi / 365)
-    cos_t     = np.cos(time * 2 * np.pi / 365)
-    u         = np.sum(residuals * sin_t) / np.sum(sin_t ** 2)
-    w         = np.sum(residuals * cos_t) / np.sum(cos_t ** 2)
+    sin_t = np.sin(time * 2 * np.pi / 365)
+    cos_t = np.cos(time * 2 * np.pi / 365)
+    u = np.sum(residuals * sin_t) / np.sum(sin_t ** 2)
+    w = np.sum(residuals * cos_t) / np.sum(cos_t ** 2)
     amplitude = np.sqrt(u ** 2 + w ** 2)
-    phase     = np.arctan2(w, u)
+    phase = np.arctan2(w, u)
 
     # Exact lookup for observed month-end dates
     exact = {_days(d): p for d, p in zip(df["date"], prices)}
@@ -102,49 +94,43 @@ def _build_price_model(csv_source: str):
 
     return estimate_price
 
-
-# ═══════════════════════════════════════════════════════════════════════════════
 # 2.  GENERALISED CONTRACT PRICER
-# ═══════════════════════════════════════════════════════════════════════════════
-
 def price_storage_contract(
-    injection_dates:      list,
-    withdrawal_dates:     list,
-    injection_volumes:    list,
-    withdrawal_volumes:   list,
-    max_injection_rate:   float,
-    max_withdrawal_rate:  float,
-    max_volume:           float,
+    injection_dates: list,
+    withdrawal_dates: list,
+    injection_volumes: list,
+    withdrawal_volumes: list,
+    max_injection_rate: float,
+    max_withdrawal_rate: float,
+    max_volume: float,
     monthly_storage_cost: float,
-    csv_path:             str  = None,
-    verbose:              bool = True,
+    csv_path: str  = None,
+    verbose: bool = True,
 ) -> dict:
     """
     Price a generalised natural gas storage contract with multiple legs.
 
-    Parameters
-    ----------
-    injection_dates      : list of str/date  — dates to buy and inject gas
-    withdrawal_dates     : list of str/date  — dates to withdraw and sell gas
-    injection_volumes    : list of float     — MMBtu to inject on each date
-    withdrawal_volumes   : list of float     — MMBtu to withdraw on each date
-    max_injection_rate   : float  — MMBtu/day ceiling on injections
-    max_withdrawal_rate  : float  — MMBtu/day ceiling on withdrawals
-    max_volume           : float  — tank capacity in MMBtu
-    monthly_storage_cost : float  — flat $/month facility rental fee
-    csv_path             : str or None
-        Path to Nat_Gas.csv.
-        • None (default) → auto-detect: script folder → cwd → GitHub URL
-        - Explicit path  -> e.g. csv_path=r"C:/Users/kokhe/.../Nat_Gas.csv"
-    verbose              : bool   — print blotter and P&L if True
+    Parameters: 
+        injection_dates : list of str/date  — dates to buy and inject gas
+        withdrawal_dates : list of str/date  — dates to withdraw and sell gas
+        injection_volumes : list of float     — MMBtu to inject on each date
+        withdrawal_volumes : list of float     — MMBtu to withdraw on each date
+        max_injection_rate : float  — MMBtu/day ceiling on injections
+        max_withdrawal_rate : float  — MMBtu/day ceiling on withdrawals
+        max_volume : float  — tank capacity in MMBtu
+        monthly_storage_cost : float  — flat $/month facility rental fee
+        csv_path : str or None
+            Path to Nat_Gas.csv.
+            • None (default) → auto-detect: script folder → cwd → GitHub URL
+            - Explicit path  -> e.g. csv_path=r"C:/Users/kokhe/.../Nat_Gas.csv"
+        verbose : bool   — print blotter and P&L if True
 
-    Returns
-    -------
-    dict with keys:
-        cash_in, cash_out, storage_cost, net_contract_value,
-        profitable (bool), legs (list), warnings (list)
+    Returns:
+        dict with keys:
+            cash_in, cash_out, storage_cost, net_contract_value,
+            profitable (bool), legs (list), warnings (list)
     """
-    # ── Validate inputs ──────────────────────────────────────────────────────
+    # Validate inputs 
     if len(injection_dates) != len(injection_volumes):
         raise ValueError("injection_dates and injection_volumes must be the same length.")
     if len(withdrawal_dates) != len(withdrawal_volumes):
@@ -156,10 +142,10 @@ def price_storage_contract(
     if max_injection_rate <= 0 or max_withdrawal_rate <= 0:
         raise ValueError("Rate parameters must be positive.")
 
-    source         = _resolve_csv(csv_path)
+    source = _resolve_csv(csv_path)
     estimate_price = _build_price_model(source)
 
-    # ── Build unified sorted event list ──────────────────────────────────────
+    # Build unified sorted event list
     events = []
     for d, v in zip(injection_dates, injection_volumes):
         events.append({"date": pd.Timestamp(d), "type": "inject",   "requested": float(v)})
@@ -169,32 +155,32 @@ def price_storage_contract(
     # Chronological order; injections before withdrawals on the same day
     events.sort(key=lambda e: (e["date"], 0 if e["type"] == "inject" else 1))
 
-    # ── Walk through events ──────────────────────────────────────────────────
-    cash_in           = 0.0
-    cash_out          = 0.0
-    storage_cost      = 0.0
-    current_vol       = 0.0
-    prev_date         = None
-    blotter           = []
+    # Walk through events 
+    cash_in = 0.0
+    cash_out = 0.0
+    storage_cost = 0.0
+    current_vol = 0.0
+    prev_date = None
+    blotter = []
     contract_warnings = []
 
     daily_storage_rate = monthly_storage_cost / 30.0   # flat fee, not per-MMBtu
 
     for ev in events:
-        ev_date   = ev["date"]
-        ev_type   = ev["type"]
+        ev_date = ev["date"]
+        ev_type = ev["type"]
         requested = ev["requested"]
-        price     = estimate_price(ev_date)
+        price = estimate_price(ev_date)
 
         # Accrue flat storage fee for the gap since the previous event
         if prev_date is not None:
-            days_held     = (ev_date - prev_date).days
+            days_held = (ev_date - prev_date).days
             storage_cost += daily_storage_rate * days_held
 
         if ev_type == "inject":
-            after_rate  = min(requested, max_injection_rate)
-            space_left  = max_volume - current_vol
-            actual      = max(min(after_rate, space_left), 0.0)
+            after_rate = min(requested, max_injection_rate)
+            space_left = max_volume - current_vol
+            actual = max(min(after_rate, space_left), 0.0)
 
             if actual < requested:
                 contract_warnings.append(
@@ -204,7 +190,7 @@ def price_storage_contract(
                     f"space remaining: {space_left:,.0f})."
                 )
 
-            cash_out    += actual * price
+            cash_out += actual * price
             current_vol += actual
             blotter.append({
                 "date": ev_date.date(), "type": "INJECT",
@@ -214,8 +200,8 @@ def price_storage_contract(
             })
 
         else:  # withdraw
-            after_rate  = min(requested, max_withdrawal_rate)
-            actual      = max(min(after_rate, current_vol), 0.0)
+            after_rate = min(requested, max_withdrawal_rate)
+            actual = max(min(after_rate, current_vol), 0.0)
 
             if actual < requested:
                 contract_warnings.append(
@@ -225,7 +211,7 @@ def price_storage_contract(
                     f"in tank: {current_vol:,.0f})."
                 )
 
-            cash_in     += actual * price
+            cash_in += actual * price
             current_vol -= actual
             blotter.append({
                 "date": ev_date.date(), "type": "WITHDRAW",
@@ -238,7 +224,7 @@ def price_storage_contract(
 
     net_contract_value = cash_in - cash_out - storage_cost
 
-    # ── Verbose blotter ──────────────────────────────────────────────────────
+    # Verbose blotter
     if verbose:
         W = 72
         print("\n" + "=" * W)
@@ -268,20 +254,17 @@ def price_storage_contract(
         print()
 
     return {
-        "cash_in":            round(cash_in, 2),
-        "cash_out":           round(cash_out, 2),
-        "storage_cost":       round(storage_cost, 2),
+        "cash_in": round(cash_in, 2),
+        "cash_out": round(cash_out, 2),
+        "storage_cost": round(storage_cost, 2),
         "net_contract_value": round(net_contract_value, 2),
-        "profitable":         net_contract_value > 0,
-        "legs":               blotter,
-        "warnings":           contract_warnings,
+        "profitable": net_contract_value > 0,
+        "legs": blotter,
+        "warnings": contract_warnings,
     }
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
 # 3.  TEST CASES
-# ═══════════════════════════════════════════════════════════════════════════════
-
 if __name__ == "__main__":
 
     # csv_path=None  ->  auto-detects Nat_Gas.csv in the same folder as this script
